@@ -17,9 +17,7 @@ namespace HackerNews.Controllers
         {
             try
             {
-                List<int> newestNewsStoryIdsList = GetMostRecentNewsStoryIdsList().Result;
-
-                List<NewsItem> mostRecentNewsItems = GetMostRecentNewsItems(newestNewsStoryIdsList).Result;
+                List<NewsItem> mostRecentNewsItems = GetMostRecentNewsItemsAsync().Result;
                 return Ok(mostRecentNewsItems);
             }
             catch (Exception ex)
@@ -28,7 +26,7 @@ namespace HackerNews.Controllers
             }
         }
 
-        private async Task<List<int>> GetMostRecentNewsStoryIdsList()
+        private static async Task<List<int>> GetMostRecentNewsStoryIdsListAsync()
         {
             using (var client = new HttpClient())
             {
@@ -38,9 +36,9 @@ namespace HackerNews.Controllers
 
                 HttpResponseMessage response = client.GetAsync("newstories.json").Result;
                 
-                var newestNewsStoryIdsList = await response.Content.ReadAsAsync<List<int>>();
+                var mostRecentNewsStoryIdsList = await response.Content.ReadAsAsync<List<int>>();
 
-                return newestNewsStoryIdsList;                               
+                return mostRecentNewsStoryIdsList;                               
             }
         }
 
@@ -50,7 +48,7 @@ namespace HackerNews.Controllers
             return mostRecentNewsItemId;
         }
 
-        private async Task<NewsItem> GetSingleNewsItem(int newsItemId)
+        private static async Task<NewsItem> GetSingleNewsItemAsync(int newsItemId)
         {
             {
                 using (var client = new HttpClient())
@@ -66,25 +64,42 @@ namespace HackerNews.Controllers
             }
         }
 
-        private async Task<List<NewsItem>> GetMostRecentNewsItems(List<int> mostRecentNewsStoryIdsList)
+        private static async Task<List<NewsItem>> GetMostRecentNewsItemsAsync()
         {
-            List<NewsItem> newsItemsList = new List<NewsItem>();
-            using (var client = new HttpClient())
-            {
-                client.BaseAddress = new Uri("https://hacker-news.firebaseio.com/v0/");
-                client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            List<int> mostRecentNewsStoryIdsList = await GetMostRecentNewsStoryIdsListAsync();
+            List<Task<NewsItem>> newsItemTasksList = new List<Task<NewsItem>>();
 
-                foreach (int newsItemId in mostRecentNewsStoryIdsList)
-                {
-                    HttpResponseMessage response = client.GetAsync("item/" + newsItemId + ".json").Result;
-                    NewsItem newsItem = await response.Content.ReadAsAsync<NewsItem>();
-                    if (newsItem is null) continue;
-                    if (String.IsNullOrEmpty(newsItem.Url)) continue;
-                    newsItemsList.Add(newsItem);
-                }
-            }
-            return newsItemsList;
+            Parallel.ForEach<int>(mostRecentNewsStoryIdsList, (newsItemId) =>
+               {
+                   newsItemTasksList.Add(GetSingleNewsItemAsync(newsItemId));
+               }
+            );
+            var taskResults = await Task.WhenAll(newsItemTasksList);
+            return new List<NewsItem>(taskResults);
         } 
+
+        private bool NewsItemIsNull(NewsItem newsItem)
+        {
+            if (newsItem is null) return true;
+            return false;
+        }
+
+        private bool NewsItemUrlIsNull(NewsItem newsItem)
+        {
+            if (String.IsNullOrEmpty(newsItem.Url)) return true;
+            return false;
+        }
     }
 }
+/*
+ * TODO:
+ * -- Cancelation tokens 
+ * -- if (newsItem is null) return;  
+ * -- if (String.IsNullOrEmpty(newsItem.Url)) return;
+ * 
+ * 
+ *
+                
+                   // Sometimes new stories are discussions on HackerNews and don't have a link URL
+                    );
+ */
