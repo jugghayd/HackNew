@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-
-namespace HackerNews.Models
+﻿namespace HackerNews.Models
 {
-    public class NewsItem
+    public class NewsItem : INewsItem
     {
         public int Id { get; set; }
         public string Title { get; set; }
